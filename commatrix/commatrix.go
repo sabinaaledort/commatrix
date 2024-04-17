@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liornoy/node-comm-lib/pkg/client"
-	"github.com/liornoy/node-comm-lib/pkg/endpointslices"
-	"github.com/liornoy/node-comm-lib/pkg/types"
+	"github.com/openshift-kni/commatrix/client"
+	"github.com/openshift-kni/commatrix/endpointslices"
+	"github.com/openshift-kni/commatrix/types"
 )
+
+// TODO: add integration tests
 
 type Env int
 
@@ -19,13 +21,20 @@ const (
 	AWS
 )
 
+type Deployment int
+
+const (
+	SNO Deployment = iota
+	MNO
+)
+
 // New initializes a ComMatrix using Kubernetes cluster data.
 // It takes kubeconfigPath for cluster access to  fetch EndpointSlice objects,
 // detailing open ports for ingress traffic.
-// customEntriesPath allows adding custom entries from a JSON file to the matrix.
+// Custom entries from a JSON file can be added to the matrix by setting `customEntriesPath`.
 // Returns a pointer to ComMatrix and error. Entries include traffic direction, protocol,
 // port number, namespace, service name, pod, container, node role, and flow optionality for OpenShift.
-func New(kubeconfigPath string, customEntriesPath string, e Env) (*types.ComMatrix, error) {
+func New(kubeconfigPath string, customEntriesPath string, e Env, d Deployment) (*types.ComMatrix, error) {
 	res := make([]types.ComDetails, 0)
 
 	cs, err := client.New(kubeconfigPath)
@@ -44,7 +53,7 @@ func New(kubeconfigPath string, customEntriesPath string, e Env) (*types.ComMatr
 	}
 	res = append(res, epSliceComDetails...)
 
-	staticEntries, err := getStaticEntries(e)
+	staticEntries, err := getStaticEntries(e, d)
 	if err != nil {
 		return nil, err
 	}
@@ -83,32 +92,56 @@ func addFromFile(fp string) ([]types.ComDetails, error) {
 	return res, nil
 }
 
-func getStaticEntries(e Env) ([]types.ComDetails, error) {
-	var (
-		envComDetails     []types.ComDetails
-		genericComDetails []types.ComDetails
-	)
+func getStaticEntries(e Env, d Deployment) ([]types.ComDetails, error) {
+	comDetails := []types.ComDetails{}
+	add := []types.ComDetails{}
+
 	switch e {
 	case Baremetal:
-		err := json.Unmarshal([]byte(baremetalStaticEntries), &envComDetails)
+		err := json.Unmarshal([]byte(baremetalStaticEntriesMaster), &add)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
 		}
+		comDetails = append(comDetails, add...)
+		if d == SNO {
+			break
+		}
+		err = json.Unmarshal([]byte(baremetalStaticEntriesWorker), &add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
+		}
+		comDetails = append(comDetails, add...)
 	case AWS:
-		err := json.Unmarshal([]byte(awsCloudStaticEntries), &envComDetails)
+		err := json.Unmarshal([]byte(awsCloudStaticEntriesMaster), &add)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
 		}
+		comDetails = append(comDetails, add...)
+		if d == SNO {
+			break
+		}
+		err = json.Unmarshal([]byte(awsCloudStaticEntriesWorker), &add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
+		}
+		comDetails = append(comDetails, add...)
 	default:
 		return nil, fmt.Errorf("invalid value for cluster environment")
 	}
 
-	err := json.Unmarshal([]byte(generalStaticEntries), &genericComDetails)
+	err := json.Unmarshal([]byte(generalStaticEntriesMaster), &add)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
 	}
+	comDetails = append(comDetails, add...)
+	if d == SNO {
+		return comDetails, nil
+	}
 
-	res := append(envComDetails, genericComDetails...)
-
-	return res, nil
+	err = json.Unmarshal([]byte(generalStaticEntriesWorker), &add)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
+	}
+	comDetails = append(comDetails, add...)
+	return comDetails, nil
 }

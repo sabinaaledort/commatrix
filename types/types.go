@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/template"
 
-	"github.com/liornoy/node-comm-lib/pkg/nftables"
 	"sigs.k8s.io/yaml"
 )
 
@@ -28,14 +26,17 @@ type ComDetails struct {
 	Optional  bool   `json:"optional"`
 }
 
-func (m *ComMatrix) ToCSV() ([]byte, error) {
+func ToCSV(m ComMatrix) ([]byte, error) {
 	var header = "direction,protocol,port,namespace,service,pod,container,nodeRole,optional"
 
 	out := make([]byte, 0)
 	w := bytes.NewBuffer(out)
 	csvwriter := csv.NewWriter(w)
 
-	csvwriter.Write(strings.Split(header, ","))
+	err := csvwriter.Write(strings.Split(header, ","))
+	if err != nil {
+		return nil, fmt.Errorf("failed to write to CSV: %w", err)
+	}
 
 	for _, cd := range m.Matrix {
 		record := strings.Split(cd.String(), ",")
@@ -49,7 +50,7 @@ func (m *ComMatrix) ToCSV() ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func (m *ComMatrix) ToJSON() ([]byte, error) {
+func ToJSON(m ComMatrix) ([]byte, error) {
 	out, err := json.Marshal(m.Matrix)
 	if err != nil {
 		return nil, err
@@ -58,42 +59,13 @@ func (m *ComMatrix) ToJSON() ([]byte, error) {
 	return out, nil
 }
 
-func (m *ComMatrix) ToYAML() ([]byte, error) {
+func ToYAML(m ComMatrix) ([]byte, error) {
 	out, err := yaml.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
 
 	return out, nil
-}
-
-func (m *ComMatrix) ToNftables() ([]byte, error) {
-	var res bytes.Buffer
-	data := nftables.Data{
-		AllowedTCPPorts: make([]string, 0),
-		AllowedUDPPorts: make([]string, 0),
-	}
-
-	for _, cd := range m.Matrix {
-		if cd.Protocol == "TCP" {
-			data.AllowedTCPPorts = append(data.AllowedTCPPorts, cd.Port)
-		}
-		if cd.Protocol == "UDP" {
-			data.AllowedUDPPorts = append(data.AllowedUDPPorts, cd.Port)
-		}
-	}
-
-	tmpl, err := template.New("nftablesTemplate").Parse(nftables.Template)
-	if err != nil {
-		return nil, err
-	}
-
-	err = tmpl.Execute(&res, data)
-	if err != nil {
-		return nil, err
-	}
-
-	return res.Bytes(), nil
 }
 
 func (m *ComMatrix) String() string {
@@ -123,15 +95,20 @@ func RemoveDups(outPuts []ComDetails) []ComDetails {
 	return res
 }
 
+func (cd ComDetails) Equals(other ComDetails) bool {
+	strComDetail1 := fmt.Sprintf("%s-%s-%s", cd.NodeRole, cd.Port, cd.Protocol)
+	strComDetail2 := fmt.Sprintf("%s-%s-%s", other.NodeRole, other.Port, other.Protocol)
+
+	return strComDetail1 == strComDetail2
+}
+
 // Diff returns the diff ComMatrix.
 func (m ComMatrix) Diff(other ComMatrix) ComMatrix {
 	diff := []ComDetails{}
 	for _, cd1 := range m.Matrix {
 		found := false
-		strComDetail1 := fmt.Sprintf("%s-%s-%s", cd1.NodeRole, cd1.Port, cd1.Protocol)
 		for _, cd2 := range other.Matrix {
-			strComDetail2 := fmt.Sprintf("%s-%s-%s", cd2.NodeRole, cd2.Port, cd2.Protocol)
-			if strComDetail1 == strComDetail2 {
+			if cd1.Equals(cd2) {
 				found = true
 				break
 			}
@@ -142,4 +119,14 @@ func (m ComMatrix) Diff(other ComMatrix) ComMatrix {
 	}
 
 	return ComMatrix{Matrix: diff}
+}
+
+func (m ComMatrix) Contains(cd ComDetails) bool {
+	for _, cd1 := range m.Matrix {
+		if cd1.Equals(cd) {
+			return true
+		}
+	}
+
+	return false
 }

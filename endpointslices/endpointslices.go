@@ -11,15 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/liornoy/node-comm-lib/pkg/client"
-	"github.com/liornoy/node-comm-lib/pkg/consts"
-	nodesutil "github.com/liornoy/node-comm-lib/pkg/nodes"
-	"github.com/liornoy/node-comm-lib/pkg/types"
+	"github.com/openshift-kni/commatrix/client"
+	"github.com/openshift-kni/commatrix/consts"
+	nodesutil "github.com/openshift-kni/commatrix/nodes"
+	"github.com/openshift-kni/commatrix/types"
 )
 
 type EndpointSlicesInfo struct {
 	EndpointSlice discoveryv1.EndpointSlice
-	Serivce       corev1.Service
+	Service       corev1.Service
 	Pods          []corev1.Pod
 }
 
@@ -52,7 +52,7 @@ func GetIngressEndpointSlicesInfo(cs *client.ClientSet) ([]EndpointSlicesInfo, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to bundle resources: %w", err)
 	}
-	log.Debug("length of the creaed epsliceInfos slice: ", len(epsliceInfos))
+	log.Debug("length of the created epsliceInfos slice: ", len(epsliceInfos))
 	res := FilterForIngressTraffic(epsliceInfos)
 
 	log.Debug("length of the slice after filter: ", len(res))
@@ -61,7 +61,7 @@ func GetIngressEndpointSlicesInfo(cs *client.ClientSet) ([]EndpointSlicesInfo, e
 
 func ToComDetails(cs *client.ClientSet, epSlicesInfo []EndpointSlicesInfo) ([]types.ComDetails, error) {
 	comDetails := make([]types.ComDetails, 0)
-	nodeList, err := cs.Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodeList, err := cs.CoreV1Interface.Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -84,13 +84,13 @@ func ToComDetails(cs *client.ClientSet, epSlicesInfo []EndpointSlicesInfo) ([]ty
 func createEPSliceInfos(epSlicesList *discoveryv1.EndpointSliceList, servicesList *corev1.ServiceList, podsList *corev1.PodList) ([]EndpointSlicesInfo, error) {
 	var service *corev1.Service
 	var pod corev1.Pod
-	found := false
+	var found bool
 	res := make([]EndpointSlicesInfo, 0)
 
 	for _, epSlice := range epSlicesList.Items {
 		// Fetch info about the service behind the endpointslice.
 		if len(epSlice.OwnerReferences) == 0 {
-			log.Warnf("warning: empty OwnerReferences in EndpointSlice %s/%s. skipping", epSlice.Namespace, epSlice.Name)
+			log.Warnf("empty OwnerReferences in EndpointSlice %s/%s. skipping", epSlice.Namespace, epSlice.Name)
 			continue
 		}
 
@@ -105,14 +105,14 @@ func createEPSliceInfos(epSlicesList *discoveryv1.EndpointSliceList, servicesLis
 		pods := make([]corev1.Pod, 0)
 		for _, endpoint := range epSlice.Endpoints {
 			if endpoint.TargetRef == nil {
-				log.Warnf("warning: empty TargetRef for endpoint %s in EndpointSlice %s. skipping", *endpoint.NodeName, epSlice.Name)
+				log.Warnf("empty TargetRef for endpoint %s in EndpointSlice %s. skipping", *endpoint.NodeName, epSlice.Name)
 				continue
 			}
 			name := endpoint.TargetRef.Name
 			namespace := endpoint.TargetRef.Namespace
 
 			if pod, found = getPod(name, namespace, podsList); !found {
-				log.Warnf("warning: failed to get pod %s/%s for endpoint in EndpointSlice %s. skipping", namespace, name, epSlice.Name)
+				log.Warnf("failed to get pod %s/%s for endpoint in EndpointSlice %s. skipping", namespace, name, epSlice.Name)
 				continue
 			}
 
@@ -120,7 +120,7 @@ func createEPSliceInfos(epSlicesList *discoveryv1.EndpointSliceList, servicesLis
 			log.Debugf("Added a new endpointSliceInfo with pods len: %d", len(pods))
 			res = append(res, EndpointSlicesInfo{
 				EndpointSlice: epSlice,
-				Serivce:       *service,
+				Service:       *service,
 				Pods:          pods,
 			})
 		}
@@ -156,7 +156,7 @@ func getEndpointSliceNodeRoles(epSliceInfo *EndpointSlicesInfo, nodes []corev1.N
 		nodeName := endpoint.NodeName
 		for _, node := range nodes {
 			if node.Name == *nodeName {
-				role := nodesutil.GetRoles(&node)
+				role := nodesutil.GetRole(&node)
 				rolesMap[role] = true
 				log.Debug("found node, role is:", role)
 			}
@@ -211,7 +211,7 @@ func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]type
 	res := make([]types.ComDetails, 0)
 
 	// Get the Namespace and Pod's name from the service.
-	namespace := epSliceinfo.Serivce.Namespace
+	namespace := epSliceinfo.Service.Namespace
 	name := epSliceinfo.EndpointSlice.OwnerReferences[0].Name
 
 	// Get the node roles of this endpointslice. (master or worker or both).
