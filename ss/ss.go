@@ -1,18 +1,20 @@
 package ss
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/liornoy/node-comm-lib/pkg/client"
-	"github.com/liornoy/node-comm-lib/pkg/consts"
-	"github.com/liornoy/node-comm-lib/pkg/debug"
-	"github.com/liornoy/node-comm-lib/pkg/nodes"
-	"github.com/liornoy/node-comm-lib/pkg/types"
+	"github.com/openshift-kni/commatrix/client"
+	"github.com/openshift-kni/commatrix/consts"
+	"github.com/openshift-kni/commatrix/debug"
+	"github.com/openshift-kni/commatrix/nodes"
+	"github.com/openshift-kni/commatrix/types"
 )
 
 const (
@@ -35,7 +37,7 @@ var (
 	}
 )
 
-func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node) ([]types.ComDetails, error) {
+func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
 	debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
 	if err != nil {
 		return nil, err
@@ -58,6 +60,15 @@ func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node) ([]types.
 
 	ssOutFilteredTCP := filterStrings(tcpSSFilterFn, splitByLines(ssOutTCP))
 	ssOutFilteredUDP := filterStrings(udpSSFilterFn, splitByLines(ssOutUDP))
+
+	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredTCP, "\n"))))
+	if err != nil {
+		return nil, fmt.Errorf("failed writing to file: %s", err)
+	}
+	_, err = udpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredUDP, "\n"))))
+	if err != nil {
+		return nil, fmt.Errorf("failed writing to file: %s", err)
+	}
 
 	tcpComDetails, err := toComDetails(ssOutFilteredTCP, "TCP", node)
 	if err != nil {
@@ -82,7 +93,7 @@ func splitByLines(bytes []byte) []string {
 
 func toComDetails(ssOutput []string, protocol string, node *corev1.Node) ([]types.ComDetails, error) {
 	res := make([]types.ComDetails, 0)
-	nodeRoles := nodes.GetRoles(node)
+	nodeRoles := nodes.GetRole(node)
 
 	for _, ssEntry := range ssOutput {
 		cd, err := parseComDetail(ssEntry)
@@ -98,86 +109,86 @@ func toComDetails(ssOutput []string, protocol string, node *corev1.Node) ([]type
 	return res, nil
 }
 
-// Func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string, error) {.
-// 	pid, err := extractPID(ssEntry)
-// 	if err != nil {
-// 		return "", err
-// 	}
+func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string, error) {
+	pid, err := extractPID(ssEntry)
+	if err != nil {
+		return "", err
+	}
 
-// 	containerID, err := extractContainerID(debugPod, pid)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	containerID, err := extractContainerID(debugPod, pid)
+	if err != nil {
+		return "", err
+	}
 
-// 	res, err := extractContainerInfo(debugPod, containerID)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	res, err := extractContainerInfo(debugPod, containerID)
+	if err != nil {
+		return "", err
+	}
 
-// 	return res, nil
-// }
+	return res, nil
+}
 
-// func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string, error) {
-// 	type ContainerInfo struct {
-// 		Containers []struct {
-// 			Labels struct {
-// 				ContainerName string `json:"io.kubernetes.container.name"`
-// 				PodName       string `json:"io.kubernetes.pod.name"`
-// 				PodNamespace  string `json:"io.kubernetes.pod.namespace"`
-// 			} `json:"labels"`
-// 		} `json:"containers"`
-// 	}
-// 	containerInfo := &ContainerInfo{}
-// 	cmd := fmt.Sprintf("crictl ps -o json --id %s", containerID)
+func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string, error) {
+	type ContainerInfo struct {
+		Containers []struct {
+			Labels struct {
+				ContainerName string `json:"io.kubernetes.container.name"`
+				PodName       string `json:"io.kubernetes.pod.name"`
+				PodNamespace  string `json:"io.kubernetes.pod.namespace"`
+			} `json:"labels"`
+		} `json:"containers"`
+	}
+	containerInfo := &ContainerInfo{}
+	cmd := fmt.Sprintf("crictl ps -o json --id %s", containerID)
 
-// 	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
+	if err != nil {
+		return "", err
+	}
 
-// 	err = json.Unmarshal(out, &containerInfo)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	if len(containerInfo.Containers) != 1 {
-// 		return "", fmt.Errorf("failed extracting pod info, got %d results expected 1. got output:\n%s", len(containerInfo.Containers), string(out))
-// 	}
+	err = json.Unmarshal(out, &containerInfo)
+	if err != nil {
+		return "", err
+	}
+	if len(containerInfo.Containers) != 1 {
+		return "", fmt.Errorf("failed extracting pod info, got %d results expected 1. got output:\n%s", len(containerInfo.Containers), string(out))
+	}
 
-// 	containerName := containerInfo.Containers[0].Labels.ContainerName
+	containerName := containerInfo.Containers[0].Labels.ContainerName
 
-// 	return containerName, nil
-// }
+	return containerName, nil
+}
 
-// func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
-// 	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
-// 	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
+func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
+	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
+	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
+	if err != nil {
+		return "", err
+	}
+	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
 
-// 	match := re.FindStringSubmatch(string(out))
+	match := re.FindStringSubmatch(string(out))
 
-// 	if len(match) < 2 {
-// 		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
-// 	}
+	if len(match) < 2 {
+		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
+	}
 
-// 	containerID := match[1]
-// 	return containerID, nil
-// }
+	containerID := match[1]
+	return containerID, nil
+}
 
-// func extractPID(input string) (string, error) {
-// 	re := regexp.MustCompile(`pid=(\d+)`)
+func extractPID(input string) (string, error) {
+	re := regexp.MustCompile(`pid=(\d+)`)
 
-// 	match := re.FindStringSubmatch(input)
+	match := re.FindStringSubmatch(input)
 
-// 	if len(match) < 2 {
-// 		return "", fmt.Errorf("PID not found in the input string")
-// 	}
+	if len(match) < 2 {
+		return "", fmt.Errorf("PID not found in the input string")
+	}
 
-// 	pid := match[1]
-// 	return pid, nil
-// }
+	pid := match[1]
+	return pid, nil
+}
 
 func filterStrings(filterOutFn func(string) bool, strs []string) []string {
 	res := make([]string, 0)

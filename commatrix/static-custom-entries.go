@@ -1,6 +1,8 @@
 package commatrix
 
-var generalStaticEntries = `
+// TODO: can just be commat struct
+
+var generalStaticEntriesWorker = `
 [
     {
         "direction": "ingress",
@@ -12,17 +14,6 @@ var generalStaticEntries = `
         "pod": "system",
         "container": "system",
         "optional": true
-    },
-    {
-        "direction": "ingress",
-        "protocol": "TCP",
-        "port": "9637",
-        "nodeRole": "master",
-        "service": "kube-rbac-proxy",
-        "namespace": "",
-        "pod": "",
-        "container": "",
-        "optional": false
     },
     {
         "direction": "ingress",
@@ -72,17 +63,6 @@ var generalStaticEntries = `
         "direction": "ingress",
         "protocol": "TCP",
         "port": "10256",
-        "nodeRole": "master",
-        "service": "openshift-sdn",
-        "namespace": "",
-        "pod": "",
-        "container": "",
-        "optional": false
-    },
-    {
-        "direction": "ingress",
-        "protocol": "TCP",
-        "port": "10256",
         "nodeRole": "worker",
         "service": "openshift-sdn",
         "namespace": "",
@@ -105,8 +85,35 @@ var generalStaticEntries = `
         "direction": "ingress",
         "protocol": "TCP",
         "port": "9537",
-        "nodeRole": "master",
+        "nodeRole": "worker",
         "service": "crio-metrics",
+        "namespace": "",
+        "pod": "",
+        "container": "",
+        "optional": false
+    }
+]
+`
+
+var generalStaticEntriesMaster = `
+[
+    {
+        "direction": "ingress",
+        "protocol": "TCP",
+        "port": "9637",
+        "nodeRole": "master",
+        "service": "kube-rbac-proxy",
+        "namespace": "",
+        "pod": "",
+        "container": "",
+        "optional": false
+    },
+    {
+        "direction": "ingress",
+        "protocol": "TCP",
+        "port": "10256",
+        "nodeRole": "master",
+        "service": "openshift-sdn",
         "namespace": "",
         "pod": "",
         "container": "",
@@ -116,7 +123,7 @@ var generalStaticEntries = `
         "direction": "ingress",
         "protocol": "TCP",
         "port": "9537",
-        "nodeRole": "worker",
+        "nodeRole": "master",
         "service": "crio-metrics",
         "namespace": "",
         "pod": "",
@@ -313,14 +320,14 @@ var generalStaticEntries = `
 ]
 `
 
-var baremetalStaticEntries = `
+var baremetalStaticEntriesWorker = `
 [
     {
         "direction": "ingress",
         "protocol": "TCP",
         "port": "53",
-        "nodeRole": "master",
-        "service": "dns-default",
+        "nodeRole": "worker",
+        "service": "none",
         "namespace": "openshift-dns",
         "pod": "dnf-default",
         "container": "dns",
@@ -329,9 +336,25 @@ var baremetalStaticEntries = `
     {
         "direction": "ingress",
         "protocol": "TCP",
-        "port": "53",
+        "port": "18080",
+        "service": "openshift-kni-infra-coredns",
         "nodeRole": "worker",
-        "service": "none",
+        "namespace": "openshift-kni-infra",
+        "pod": "coredns",
+        "container": "coredns",
+        "optional": false
+    }
+]
+`
+
+var baremetalStaticEntriesMaster = `
+[
+    {
+        "direction": "ingress",
+        "protocol": "TCP",
+        "port": "53",
+        "nodeRole": "master",
+        "service": "dns-default",
         "namespace": "openshift-dns",
         "pod": "dnf-default",
         "container": "dns",
@@ -407,17 +430,6 @@ var baremetalStaticEntries = `
         "direction": "ingress",
         "protocol": "TCP",
         "port": "18080",
-        "service": "openshift-kni-infra-coredns",
-        "nodeRole": "worker",
-        "namespace": "openshift-kni-infra",
-        "pod": "coredns",
-        "container": "coredns",
-        "optional": false
-    },
-    {
-        "direction": "ingress",
-        "protocol": "TCP",
-        "port": "18080",
         "nodeRole": "master",
         "service": "openshift-kni-infra-coredns",
         "namespace": "openshift-kni-infra",
@@ -439,7 +451,34 @@ var baremetalStaticEntries = `
 ]
 `
 
-var awsCloudStaticEntries = `
+var awsCloudStaticEntriesWorker = `
+[
+    {
+        "direction": "ingress",
+        "protocol": "TCP",
+        "port": "10304",
+        "nodeRole": "worker",
+        "service": "csi-node-driver",
+        "namespace": "",
+        "pod": "",
+        "container": "",
+        "optional": false
+    },
+    {
+        "direction": "ingress",
+        "protocol": "TCP",
+        "port": "10300",
+        "nodeRole": "worker",
+        "service": "csi-livenessprobe",
+        "namespace": "",
+        "pod": "",
+        "container": "",
+        "optional": false
+    }
+]
+`
+
+var awsCloudStaticEntriesMaster = `
 [
     {
         "direction": "ingress",
@@ -488,30 +527,8 @@ var awsCloudStaticEntries = `
     {
         "direction": "ingress",
         "protocol": "TCP",
-        "port": "10304",
-        "nodeRole": "worker",
-        "service": "csi-node-driver",
-        "namespace": "",
-        "pod": "",
-        "container": "",
-        "optional": false
-    },
-    {
-        "direction": "ingress",
-        "protocol": "TCP",
         "port": "10300",
         "nodeRole": "master",
-        "service": "csi-livenessprobe",
-        "namespace": "",
-        "pod": "",
-        "container": "",
-        "optional": false
-    },
-    {
-        "direction": "ingress",
-        "protocol": "TCP",
-        "port": "10300",
-        "nodeRole": "worker",
         "service": "csi-livenessprobe",
         "namespace": "",
         "pod": "",

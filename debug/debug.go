@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
-	"github.com/liornoy/node-comm-lib/pkg/client"
+	"github.com/openshift-kni/commatrix/client"
 )
 
 type DebugPod struct {
@@ -24,7 +24,7 @@ type DebugPod struct {
 
 const (
 	interval = 1 * time.Second
-	timeout  = 30 * time.Second
+	timeout  = 2 * time.Minute
 )
 
 // New creates debug pod on the given node, puts it in infinite sleep,
@@ -138,11 +138,7 @@ func waitPodPhase(cs *client.ClientSet, interval time.Duration, timeout time.Dur
 }
 
 func createPod(cs *client.ClientSet, node string, namespace string, image string) (*corev1.Pod, error) {
-	defaultDockerCfgServiceName, err := getSecret(cs, namespace, "default-dockercfg")
-	if err != nil {
-		return nil, err
-	}
-	podDef := getPodDefinition(node, namespace, defaultDockerCfgServiceName.Name, image)
+	podDef := getPodDefinition(node, namespace, image)
 	pod, err := cs.Pods(namespace).Create(context.TODO(), podDef, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
@@ -151,7 +147,7 @@ func createPod(cs *client.ClientSet, node string, namespace string, image string
 	return pod, nil
 }
 
-func getPodDefinition(node string, namespace string, secret string, image string) *corev1.Pod {
+func getPodDefinition(node string, namespace string, image string) *corev1.Pod {
 	podName := fmt.Sprintf("%s-debug-", strings.ReplaceAll(node, ".", "-"))
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -196,16 +192,11 @@ func getPodDefinition(node string, namespace string, secret string, image string
 					},
 				},
 			},
-			DNSPolicy:          corev1.DNSClusterFirst,
-			EnableServiceLinks: ptr.To[bool](true),
-			HostIPC:            true,
-			HostNetwork:        true,
-			HostPID:            true,
-			ImagePullSecrets: []corev1.LocalObjectReference{
-				{
-					Name: secret,
-				},
-			},
+			DNSPolicy:                     corev1.DNSClusterFirst,
+			EnableServiceLinks:            ptr.To[bool](true),
+			HostIPC:                       true,
+			HostNetwork:                   true,
+			HostPID:                       true,
 			NodeName:                      node,
 			PreemptionPolicy:              ptr.To[corev1.PreemptionPolicy](corev1.PreemptLowerPriority),
 			Priority:                      ptr.To[int32](1000000000),
@@ -298,21 +289,6 @@ func getPodDefinition(node string, namespace string, secret string, image string
 	}
 }
 
-func getSecret(cs *client.ClientSet, namespace string, secretName string) (*corev1.Secret, error) {
-	secretList, err := cs.Secrets(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, s := range secretList.Items {
-		if strings.Contains(s.Name, secretName) {
-			return &s, nil
-		}
-	}
-
-	return nil, fmt.Errorf("failed to get secret %s in namespace %s: not found", secretName, namespace)
-}
-
 func createNamespace(cs *client.ClientSet, namespace string) error {
 	_, err := cs.Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if err != nil && !strings.Contains(err.Error(), "not found") {
@@ -324,9 +300,8 @@ func createNamespace(cs *client.ClientSet, namespace string) error {
 	}
 
 	ns := getNamespaceDefinition(namespace)
-
 	_, err = cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return fmt.Errorf("failed creating namespace %s: %v", namespace, err)
 	}
 
