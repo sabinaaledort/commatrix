@@ -12,7 +12,7 @@ import (
 	"github.com/openshift-kni/commatrix/types"
 )
 
-// TODO: add integration tests
+// TODO: add integration tests.
 
 type Env int
 

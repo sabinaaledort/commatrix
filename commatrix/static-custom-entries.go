@@ -1,6 +1,6 @@
 package commatrix
 
-// TODO: can just be commat struct
+// TODO: can just be commat struct.
 
 var generalStaticEntriesWorker = `
 [
