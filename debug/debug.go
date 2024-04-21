@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
@@ -290,18 +291,9 @@ func getPodDefinition(node string, namespace string, image string) *corev1.Pod {
 }
 
 func createNamespace(cs *client.ClientSet, namespace string) error {
-	_, err := cs.Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return fmt.Errorf("failed checking if namespace %s already exists: %v", namespace, err)
-	}
-
-	if err == nil {
-		return nil
-	}
-
 	ns := getNamespaceDefinition(namespace)
-	_, err = cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
+	_, err := cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed creating namespace %s: %v", namespace, err)
 	}
 
