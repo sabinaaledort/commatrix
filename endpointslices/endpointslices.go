@@ -76,7 +76,7 @@ func ToComDetails(cs *client.ClientSet, epSlicesInfo []EndpointSlicesInfo) ([]ty
 	return cleanedComDetails, nil
 }
 
-// createEPSliceInfos retrieves lists of EndpointSlices, Services, and Pods from the cluster and generates
+// createEPSliceInfos gets lists of EndpointSlices, Services, and Pods and generates
 // a slice of EndpointSlicesInfo, each representing a distinct service.
 func createEPSliceInfos(epSlicesList *discoveryv1.EndpointSliceList, servicesList *corev1.ServiceList, podsList *corev1.PodList) ([]EndpointSlicesInfo, error) {
 	var service *corev1.Service
