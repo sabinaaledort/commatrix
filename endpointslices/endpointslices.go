@@ -24,24 +24,21 @@ type EndpointSlicesInfo struct {
 }
 
 func GetIngressEndpointSlicesInfo(cs *client.ClientSet) ([]EndpointSlicesInfo, error) {
-	var (
-		epSlicesList discoveryv1.EndpointSliceList
-		servicesList corev1.ServiceList
-		podsList     corev1.PodList
-	)
-
+	var epSlicesList discoveryv1.EndpointSliceList
 	err := cs.List(context.TODO(), &epSlicesList, &rtclient.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list endpointslices: %w", err)
 	}
 	log.Debugf("amount of EndpointSlices in the cluster: %d", len(epSlicesList.Items))
 
+	var servicesList corev1.ServiceList
 	err = cs.List(context.TODO(), &servicesList, &rtclient.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list services: %w", err)
 	}
 	log.Debugf("amount of Services in the cluster: %d", len(servicesList.Items))
 
+	var podsList corev1.PodList
 	err = cs.List(context.TODO(), &podsList, &rtclient.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %w", err)
