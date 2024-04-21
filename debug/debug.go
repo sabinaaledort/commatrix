@@ -303,24 +303,11 @@ func createNamespace(cs *client.ClientSet, namespace string) error {
 func getNamespaceDefinition(namespace string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
-				"oc.openshift.io/command":                 "oc debug",
-				"openshift.io/node-selector":              "",
-				"openshift.io/sa.scc.mcs":                 "s0:c26,c25",
-				"openshift.io/sa.scc.supplemental-groups": "1000700000/10000",
-				"openshift.io/sa.scc.uid-range":           "1000700000/10000",
-			},
 			Name: namespace,
 			Labels: map[string]string{
-				"pod-security.kubernetes.io/audit":               "privileged",
-				"pod-security.kubernetes.io/enforce":             "privileged",
-				"pod-security.kubernetes.io/warn":                "privileged",
-				"security.openshift.io/scc.podSecurityLabelSync": "false",
-			},
-		},
-		Spec: corev1.NamespaceSpec{
-			Finalizers: []corev1.FinalizerName{
-				"kubernetes",
+				"pod-security.kubernetes.io/audit":   "privileged",
+				"pod-security.kubernetes.io/enforce": "privileged",
+				"pod-security.kubernetes.io/warn":    "privileged",
 			},
 		},
 	}
