@@ -157,7 +157,7 @@ func main() {
 		panic(err)
 	}
 
-	cleanedComDetails := types.RemoveDups(nodesComDetails)
+	cleanedComDetails := types.CleanComDetails(nodesComDetails)
 	ssComMat := types.ComMatrix{Matrix: cleanedComDetails}
 
 	res, err = printFn(ssComMat)

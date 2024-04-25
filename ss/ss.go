@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -188,7 +189,13 @@ func parseComDetail(ssEntry string) *types.ComDetails {
 
 	fields := strings.Fields(ssEntry)
 	portIdx := strings.LastIndex(fields[localAddrPortFieldIdx], ":")
-	port := fields[localAddrPortFieldIdx][portIdx+1:]
+	portStr := fields[localAddrPortFieldIdx][portIdx+1:]
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Debugf(err.Error())
+		return nil
+	}
 
 	return &types.ComDetails{
 		Direction: consts.IngressLabel,
