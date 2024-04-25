@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -112,6 +113,7 @@ func main() {
 		panic(err)
 	}
 
+	// TODO: should this be in the ss utility?
 	nodesComDetails := []types.ComDetails{}
 
 	err = debug.CreateNamespace(cs, consts.DefaultDebugNamespace)
@@ -158,6 +160,7 @@ func main() {
 	}
 
 	cleanedComDetails := types.RemoveDups(nodesComDetails)
+	slices.SortFunc(cleanedComDetails, types.CmpComDetails)
 	ssComMat := types.ComMatrix{Matrix: cleanedComDetails}
 
 	res, err = printFn(ssComMat)

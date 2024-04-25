@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -15,19 +16,19 @@ type ComMatrix struct {
 }
 
 type ComDetails struct {
-	Direction string `json:"direction"`
-	Protocol  string `json:"protocol"`
-	Port      string `json:"port"`
-	Namespace string `json:"namespace"`
-	Service   string `json:"service"`
-	Pod       string `json:"pod"`
-	Container string `json:"container"`
-	NodeRole  string `json:"nodeRole"`
-	Optional  bool   `json:"optional"`
+	Direction string `json:"Direction"`
+	Protocol  string `json:"Protocol"`
+	Port      int    `json:"Port,string"`
+	Namespace string `json:"Namespace"`
+	Service   string `json:"Service"`
+	Pod       string `json:"Pod"`
+	Container string `json:"Container"`
+	NodeRole  string `json:"Node Role"`
+	Optional  bool   `json:"Optional"`
 }
 
 func ToCSV(m ComMatrix) ([]byte, error) {
-	var header = "direction,protocol,port,namespace,service,pod,container,nodeRole,optional"
+	var header = "Direction,Protocol,Port,Namespace,Service,Pod,Container,Node Role,Optional"
 
 	out := make([]byte, 0)
 	w := bytes.NewBuffer(out)
@@ -78,14 +79,14 @@ func (m *ComMatrix) String() string {
 }
 
 func (cd ComDetails) String() string {
-	return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%v", cd.Direction, cd.Protocol, cd.Port, cd.Namespace, cd.Service, cd.Pod, cd.Container, cd.NodeRole, cd.Optional)
+	return fmt.Sprintf("%s,%s,%d,%s,%s,%s,%s,%s,%v", cd.Direction, cd.Protocol, cd.Port, cd.Namespace, cd.Service, cd.Pod, cd.Container, cd.NodeRole, cd.Optional)
 }
 
 func RemoveDups(outPuts []ComDetails) []ComDetails {
 	allKeys := make(map[string]bool)
 	res := []ComDetails{}
 	for _, item := range outPuts {
-		str := fmt.Sprintf("%s-%s-%s", item.NodeRole, item.Port, item.Protocol)
+		str := fmt.Sprintf("%s-%d-%s", item.NodeRole, item.Port, item.Protocol)
 		if _, value := allKeys[str]; !value {
 			allKeys[str] = true
 			res = append(res, item)
@@ -96,8 +97,8 @@ func RemoveDups(outPuts []ComDetails) []ComDetails {
 }
 
 func (cd ComDetails) Equals(other ComDetails) bool {
-	strComDetail1 := fmt.Sprintf("%s-%s-%s", cd.NodeRole, cd.Port, cd.Protocol)
-	strComDetail2 := fmt.Sprintf("%s-%s-%s", other.NodeRole, other.Port, other.Protocol)
+	strComDetail1 := fmt.Sprintf("%s-%d-%s", cd.NodeRole, cd.Port, cd.Protocol)
+	strComDetail2 := fmt.Sprintf("%s-%d-%s", other.NodeRole, other.Port, other.Protocol)
 
 	return strComDetail1 == strComDetail2
 }
@@ -129,4 +130,18 @@ func (m ComMatrix) Contains(cd ComDetails) bool {
 	}
 
 	return false
+}
+
+func CmpComDetails(a, b ComDetails) int {
+	res := cmp.Compare(a.NodeRole, b.NodeRole)
+	if res != 0 {
+		return res
+	}
+
+	res = cmp.Compare(a.Protocol, b.Protocol)
+	if res != 0 {
+		return res
+	}
+
+	return cmp.Compare(a.Port, b.Port)
 }

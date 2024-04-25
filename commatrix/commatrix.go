@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/openshift-kni/commatrix/client"
 	"github.com/openshift-kni/commatrix/endpointslices"
@@ -68,6 +69,8 @@ func New(kubeconfigPath string, customEntriesPath string, e Env, d Deployment) (
 
 		res = append(res, customComDetails...)
 	}
+
+	slices.SortFunc(res, types.CmpComDetails)
 
 	return &types.ComMatrix{Matrix: res}, nil
 }

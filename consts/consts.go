@@ -2,7 +2,7 @@ package consts
 
 const (
 	DefaultAddressType    = "IPv4"
-	IngressLabel          = "ingress"
+	IngressLabel          = "Ingress"
 	OptionalLabel         = "optional"
 	OptionalTrue          = "true"
 	RoleLabel             = "node-role.kubernetes.io/"

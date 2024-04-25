@@ -230,7 +230,7 @@ func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]type
 			res = append(res, types.ComDetails{
 				Direction: consts.IngressLabel,
 				Protocol:  string(*port.Protocol),
-				Port:      fmt.Sprint(int(*port.Port)),
+				Port:      int(*port.Port),
 				Namespace: namespace,
 				Pod:       name,
 				Container: containerName,

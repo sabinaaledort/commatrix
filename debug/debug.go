@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/openshift-kni/commatrix/client"
+	errutil "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type DebugPod struct {
@@ -106,7 +107,8 @@ func waitPodPhase(cs *client.ClientSet, interval time.Duration, timeout time.Dur
 	getErr := errors.New("")
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, true, func(ctx context.Context) (bool, error) {
 		pod, getErr := cs.Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
-		if getErr != nil && errors.Is(getErr, exec.ErrNotFound) {
+
+		if errutil.IsNotFound(getErr) {
 			return false, getErr
 		}
 
