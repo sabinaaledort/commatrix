@@ -24,18 +24,9 @@ const (
 	duration              = time.Second * 5
 )
 
-var (
-	// TcpSSFilterFn is a function variable in Go that filters entries from the 'ss' command output.
-	// It takes an entry from the 'ss' command output and returns true if the entry represents a TCP port in the listening state.
-	tcpSSFilterFn = func(s string) bool {
-		return strings.Contains(s, "127.0.0") || !strings.Contains(s, "LISTEN")
-	}
-	// UdpSSFilterFn is a function variable in Go that filters entries from the 'ss' command output.
-	// It takes an entry from the 'ss' command output and returns true if the entry represents a UDP port in the listening state.
-	udpSSFilterFn = func(s string) bool {
-		return strings.Contains(s, "127.0.0") || !strings.Contains(s, "ESTAB")
-	}
-)
+var filterOutFn = func(s string) bool {
+	return strings.Contains(s, "127.0.0") || strings.Contains(s, "::1") || s == ""
+}
 
 func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
 	debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
@@ -49,17 +40,17 @@ func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, 
 		}
 	}()
 
-	ssOutTCP, err := debugPod.ExecWithRetry("ss -anplt", interval, duration)
+	ssOutTCP, err := debugPod.ExecWithRetry("ss -anpltH", interval, duration)
 	if err != nil {
 		return nil, err
 	}
-	ssOutUDP, err := debugPod.ExecWithRetry("ss -anplu", interval, duration)
+	ssOutUDP, err := debugPod.ExecWithRetry("ss -anpluH", interval, duration)
 	if err != nil {
 		return nil, err
 	}
 
-	ssOutFilteredTCP := filterStrings(tcpSSFilterFn, splitByLines(ssOutTCP))
-	ssOutFilteredUDP := filterStrings(udpSSFilterFn, splitByLines(ssOutUDP))
+	ssOutFilteredTCP := filterStrings(filterOutFn, splitByLines(ssOutTCP))
+	ssOutFilteredUDP := filterStrings(filterOutFn, splitByLines(ssOutUDP))
 
 	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredTCP, "\n"))))
 	if err != nil {
