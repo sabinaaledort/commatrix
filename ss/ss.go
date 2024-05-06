@@ -91,7 +91,7 @@ func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, 
 		if err != nil {
 			return nil, err
 		}
-		name, err := identifyContainerForPort(debugPod, ssEntry)
+		name, err := getContainerName(debugPod, ssEntry)
 		if err != nil {
 			log.Debugf("failed to identify container for ss entry: %serr: %s", ssEntry, err)
 		}
@@ -106,7 +106,8 @@ func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, 
 	return res, nil
 }
 
-func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string, error) {
+// getContainerName receives an ss entry and gets the name of the container exposing this port.
+func getContainerName(debugPod *debug.DebugPod, ssEntry string) (string, error) {
 	pid, err := extractPID(ssEntry)
 	if err != nil {
 		return "", err
@@ -117,7 +118,7 @@ func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string,
 		return "", err
 	}
 
-	res, err := extractContainerInfo(debugPod, containerID)
+	res, err := extractContainerName(debugPod, containerID)
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +126,41 @@ func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string,
 	return res, nil
 }
 
-func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string, error) {
+// extractPID receives an ss entry and returns the PID number of it.
+func extractPID(ssEntry string) (string, error) {
+	re := regexp.MustCompile(`pid=(\d+)`)
+
+	match := re.FindStringSubmatch(ssEntry)
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("PID not found in the input string")
+	}
+
+	pid := match[1]
+	return pid, nil
+}
+
+// extractContainerID receives a PID of a container, and returns its CRI-O ID.
+func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
+	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
+	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
+	if err != nil {
+		return "", err
+	}
+	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
+
+	match := re.FindStringSubmatch(string(out))
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
+	}
+
+	containerID := match[1]
+	return containerID, nil
+}
+
+// extractContainerName receives CRI-O container ID and returns the container's name.
+func extractContainerName(debugPod *debug.DebugPod, containerID string) (string, error) {
 	type ContainerInfo struct {
 		Containers []struct {
 			Labels struct {
@@ -154,37 +189,6 @@ func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string,
 	containerName := containerInfo.Containers[0].Labels.ContainerName
 
 	return containerName, nil
-}
-
-func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
-	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
-	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
-	if err != nil {
-		return "", err
-	}
-	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
-
-	match := re.FindStringSubmatch(string(out))
-
-	if len(match) < 2 {
-		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
-	}
-
-	containerID := match[1]
-	return containerID, nil
-}
-
-func extractPID(input string) (string, error) {
-	re := regexp.MustCompile(`pid=(\d+)`)
-
-	match := re.FindStringSubmatch(input)
-
-	if len(match) < 2 {
-		return "", fmt.Errorf("PID not found in the input string")
-	}
-
-	pid := match[1]
-	return pid, nil
 }
 
 func filterStrings(filterOutFn func(string) bool, strs []string) []string {
