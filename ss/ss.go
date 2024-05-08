@@ -45,14 +45,8 @@ func CreateComDetailsFromNode(debugPod *debug.DebugPod, node *corev1.Node, tcpFi
 	ssOutFilteredTCP := filterEntries(splitByLines(ssOutTCP))
 	ssOutFilteredUDP := filterEntries(splitByLines(ssOutUDP))
 
-	tcpComDetails, err := toComDetails(debugPod, ssOutFilteredTCP, "TCP", node)
-	if err != nil {
-		return nil, err
-	}
-	udpComDetails, err := toComDetails(debugPod, ssOutFilteredUDP, "UDP", node)
-	if err != nil {
-		return nil, err
-	}
+	tcpComDetails := toComDetails(debugPod, ssOutFilteredTCP, "TCP", node)
+	udpComDetails := toComDetails(debugPod, ssOutFilteredUDP, "UDP", node)
 
 	res := []types.ComDetails{}
 	res = append(res, udpComDetails...)
@@ -66,15 +60,13 @@ func splitByLines(bytes []byte) []string {
 	return strings.Split(str, "\n")
 }
 
-func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, node *corev1.Node) ([]types.ComDetails, error) {
+func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, node *corev1.Node) []types.ComDetails {
 	res := make([]types.ComDetails, 0)
 	nodeRoles := nodes.GetRole(node)
 
 	for _, ssEntry := range ssOutput {
-		cd, err := parseComDetail(ssEntry)
-		if err != nil {
-			return nil, err
-		}
+		cd := parseComDetail(ssEntry)
+
 		name, err := getContainerName(debugPod, ssEntry)
 		if err != nil {
 			log.Debugf("failed to identify container for ss entry: %serr: %s", ssEntry, err)
@@ -87,7 +79,7 @@ func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, 
 		res = append(res, *cd)
 	}
 
-	return res, nil
+	return res
 }
 
 // getContainerName receives an ss entry and gets the name of the container exposing this port.
@@ -188,10 +180,10 @@ func filterEntries(ssEntries []string) []string {
 	return res
 }
 
-func parseComDetail(ssEntry string) (*types.ComDetails, error) {
+func parseComDetail(ssEntry string) *types.ComDetails {
 	serviceName, err := extractServiceName(ssEntry)
 	if err != nil {
-		return nil, err
+		log.Debugf(err.Error())
 	}
 
 	fields := strings.Fields(ssEntry)
@@ -202,7 +194,7 @@ func parseComDetail(ssEntry string) (*types.ComDetails, error) {
 		Direction: consts.IngressLabel,
 		Port:      port,
 		Service:   serviceName,
-		Optional:  false}, nil
+		Optional:  false}
 }
 
 func extractServiceName(ssEntry string) (string, error) {
