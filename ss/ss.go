@@ -11,7 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/openshift-kni/commatrix/client"
 	"github.com/openshift-kni/commatrix/consts"
 	"github.com/openshift-kni/commatrix/debug"
 	"github.com/openshift-kni/commatrix/nodes"
@@ -24,18 +23,7 @@ const (
 	duration              = time.Second * 5
 )
 
-func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
-	debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		err := debugPod.Clean()
-		if err != nil {
-			fmt.Printf("failed cleaning debug pod %s: %v", debugPod, err)
-		}
-	}()
-
+func CreateComDetailsFromNode(debugPod *debug.DebugPod, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
 	ssOutTCP, err := debugPod.ExecWithRetry("ss -anpltH", interval, duration)
 	if err != nil {
 		return nil, err

@@ -35,11 +35,6 @@ func New(cs *client.ClientSet, node string, namespace string, image string) (*De
 		return nil, errors.New("failed creating new debug pod: got empty namespace")
 	}
 
-	err := createNamespace(cs, namespace)
-	if err != nil {
-		return nil, err
-	}
-
 	pod, err := createPodAndWait(cs, interval, timeout, node, namespace, image)
 	if err != nil {
 		return nil, err
@@ -84,11 +79,6 @@ func (dp *DebugPod) Clean() error {
 	output, err := exec.Command("oc", "delete", "pod", "-n", dp.Namespace, dp.Name).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed deleting debug pod %s/%s: %v\n%s", dp.Namespace, dp.Name, err, string(output))
-	}
-
-	output, err = exec.Command("oc", "delete", "ns", dp.Namespace).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed deleting debug namespace %s: %v\n%s", dp.Namespace, err, string(output))
 	}
 
 	return nil
@@ -290,11 +280,20 @@ func getPodDefinition(node string, namespace string, image string) *corev1.Pod {
 	}
 }
 
-func createNamespace(cs *client.ClientSet, namespace string) error {
+func CreateNamespace(cs *client.ClientSet, namespace string) error {
 	ns := getNamespaceDefinition(namespace)
 	_, err := cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed creating namespace %s: %v", namespace, err)
+	}
+
+	return nil
+}
+
+func DeleteNamespace(cs *client.ClientSet, namespace string) error {
+	err := cs.Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed deleting namespace %s: %v", namespace, err)
 	}
 
 	return nil

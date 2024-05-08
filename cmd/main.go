@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"sync"
 
-	clientutil "github.com/openshift-kni/commatrix/client"
-	"github.com/openshift-kni/commatrix/commatrix"
-	"github.com/openshift-kni/commatrix/ss"
-	"github.com/openshift-kni/commatrix/types"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	clientutil "github.com/openshift-kni/commatrix/client"
+	"github.com/openshift-kni/commatrix/commatrix"
+	"github.com/openshift-kni/commatrix/consts"
+	"github.com/openshift-kni/commatrix/debug"
+	"github.com/openshift-kni/commatrix/ss"
+	"github.com/openshift-kni/commatrix/types"
 )
 
 func main() {
@@ -110,12 +113,35 @@ func main() {
 	}
 
 	nodesComDetails := []types.ComDetails{}
+
+	err = debug.CreateNamespace(cs, consts.DefaultDebugNamespace)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		err := debug.DeleteNamespace(cs, consts.DefaultDebugNamespace)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	nLock := &sync.Mutex{}
 	g := new(errgroup.Group)
 	for _, n := range nodesList.Items {
 		node := n
 		g.Go(func() error {
-			cds, err := ss.CreateComDetailsFromNode(cs, &node, tcpFile, udpFile)
+			debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				err := debugPod.Clean()
+				if err != nil {
+					fmt.Printf("failed cleaning debug pod %s: %v", debugPod, err)
+				}
+			}()
+
+			cds, err := ss.CreateComDetailsFromNode(debugPod, &node, tcpFile, udpFile)
 			if err != nil {
 				return err
 			}
