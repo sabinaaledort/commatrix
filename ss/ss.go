@@ -24,10 +24,6 @@ const (
 	duration              = time.Second * 5
 )
 
-var filterOutFn = func(s string) bool {
-	return strings.Contains(s, "127.0.0") || strings.Contains(s, "::1") || s == ""
-}
-
 func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
 	debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
 	if err != nil {
@@ -49,8 +45,8 @@ func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, 
 		return nil, err
 	}
 
-	ssOutFilteredTCP := filterStrings(filterOutFn, splitByLines(ssOutTCP))
-	ssOutFilteredUDP := filterStrings(filterOutFn, splitByLines(ssOutUDP))
+	ssOutFilteredTCP := filterEntries(splitByLines(ssOutTCP))
+	ssOutFilteredUDP := filterEntries(splitByLines(ssOutUDP))
 
 	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredTCP, "\n"))))
 	if err != nil {
@@ -191,10 +187,10 @@ func extractContainerName(debugPod *debug.DebugPod, containerID string) (string,
 	return containerName, nil
 }
 
-func filterStrings(filterOutFn func(string) bool, strs []string) []string {
+func filterEntries(ssEntries []string) []string {
 	res := make([]string, 0)
-	for _, s := range strs {
-		if filterOutFn(s) {
+	for _, s := range ssEntries {
+		if strings.Contains(s, "127.0.0") || strings.Contains(s, "::1") || s == "" {
 			continue
 		}
 
