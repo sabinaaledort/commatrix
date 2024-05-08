@@ -45,17 +45,17 @@ func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, 
 		return nil, err
 	}
 
+	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s\n", node.Name, string(ssOutTCP))))
+	if err != nil {
+		return nil, fmt.Errorf("failed writing to file: %s", err)
+	}
+	_, err = udpFile.Write([]byte(fmt.Sprintf("node: %s\n%s\n", node.Name, string(ssOutUDP))))
+	if err != nil {
+		return nil, fmt.Errorf("failed writing to file: %s", err)
+	}
+
 	ssOutFilteredTCP := filterEntries(splitByLines(ssOutTCP))
 	ssOutFilteredUDP := filterEntries(splitByLines(ssOutUDP))
-
-	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredTCP, "\n"))))
-	if err != nil {
-		return nil, fmt.Errorf("failed writing to file: %s", err)
-	}
-	_, err = udpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredUDP, "\n"))))
-	if err != nil {
-		return nil, fmt.Errorf("failed writing to file: %s", err)
-	}
 
 	tcpComDetails, err := toComDetails(debugPod, ssOutFilteredTCP, "TCP", node)
 	if err != nil {
