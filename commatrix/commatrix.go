@@ -117,6 +117,8 @@ func getStaticEntries(e Env, d Deployment) ([]types.ComDetails, error) {
 		return comDetails, nil
 	}
 
+	comDetails = append(comDetails, MNOStaticEntries...)
 	comDetails = append(comDetails, generalStaticEntriesWorker...)
+
 	return comDetails, nil
 }

@@ -525,3 +525,27 @@ var awsCloudStaticEntriesMaster = []types.ComDetails{
 		Optional:  false,
 	},
 }
+
+var MNOStaticEntries = []types.ComDetails{
+	{
+		Direction: "ingress",
+		Protocol:  "UDP",
+		Port:      "6081",
+		NodeRole:  "worker",
+		Service:   "ovn-kubernetes geneve",
+		Namespace: "openshift-ovn-kubernetes",
+		Pod:       "",
+		Container: "",
+		Optional:  false,
+	}, {
+		Direction: "ingress",
+		Protocol:  "UDP",
+		Port:      "6081",
+		NodeRole:  "master",
+		Service:   "ovn-kubernetes geneve",
+		Namespace: "openshift-ovn-kubernetes",
+		Pod:       "",
+		Container: "",
+		Optional:  false,
+	},
+}
