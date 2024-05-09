@@ -174,21 +174,7 @@ func main() {
 		panic(err)
 	}
 
-	diff := ""
-	for _, cd := range mat.Matrix {
-		if ssComMat.Contains(cd) {
-			diff += fmt.Sprintf("%s\n", cd)
-			continue
-		}
-		diff += fmt.Sprintf("+ %s\n", cd)
-	}
-
-	for _, cd := range ssComMat.Matrix {
-		if !mat.Contains(cd) {
-			diff += fmt.Sprintf("- %s\n", cd)
-			continue
-		}
-	}
+	diff := diff(*mat, ssComMat)
 
 	err = os.WriteFile(filepath.Join(destDir, "matrix-diff-ss"),
 		[]byte(diff),
@@ -196,4 +182,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func diff(mat types.ComMatrix, ssMat types.ComMatrix) string {
+	diff := ""
+	for _, cd := range mat.Matrix {
+		if ssMat.Contains(cd) {
+			diff += fmt.Sprintf("%s\n", cd)
+			continue
+		}
+		diff += fmt.Sprintf("+ %s\n", cd)
+	}
+
+	for _, cd := range ssMat.Matrix {
+		if !mat.Contains(cd) {
+			diff += fmt.Sprintf("- %s\n", cd)
+		}
+	}
+
+	return diff
 }
