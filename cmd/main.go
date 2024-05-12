@@ -193,6 +193,12 @@ func buildMatrixDiff(mat1 types.ComMatrix, mat2 types.ComMatrix) string {
 	}
 
 	for _, cd := range mat2.Matrix {
+		// Skip "rpc.statd" ports, these are randomly open ports on the node,
+		// no need to mention them in the matrix diff
+		if cd.Service == "rpc.statd" {
+			continue
+		}
+
 		if !mat1.Contains(cd) {
 			diff += fmt.Sprintf("- %s\n", cd)
 		}
