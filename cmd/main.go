@@ -21,6 +21,8 @@ import (
 	"github.com/openshift-kni/commatrix/types"
 )
 
+const rpcstatdService = "rpc.statd"
+
 func main() {
 	var (
 		destDir           string
@@ -195,6 +197,10 @@ func diff(mat types.ComMatrix, ssMat types.ComMatrix) string {
 	}
 
 	for _, cd := range ssMat.Matrix {
+		// Skip rpc.statd ports, known optional service
+		if cd.Service == rpcstatdService {
+			continue
+		}
 		if !mat.Contains(cd) {
 			diff += fmt.Sprintf("- %s\n", cd)
 		}
