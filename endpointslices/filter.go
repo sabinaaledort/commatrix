@@ -58,6 +58,7 @@ func FilterHostNetwork(epInfo EndpointSlicesInfo) bool {
 }
 
 // FilterServiceTypes checks if the service behind the endpointSlice is of type LoadBalancer or NodePort.
+// Skip ClusterIP services which provide internal connectivity only
 func FilterServiceTypes(epInfo EndpointSlicesInfo) bool {
 	if epInfo.Service.Spec.Type != corev1.ServiceTypeLoadBalancer &&
 		epInfo.Service.Spec.Type != corev1.ServiceTypeNodePort {
