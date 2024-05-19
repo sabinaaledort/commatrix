@@ -69,7 +69,9 @@ func New(kubeconfigPath string, customEntriesPath string, e Env, d Deployment) (
 		res = append(res, customComDetails...)
 	}
 
-	return &types.ComMatrix{Matrix: res}, nil
+	cleanedComDetails := types.RemoveDups(res)
+
+	return &types.ComMatrix{Matrix: cleanedComDetails}, nil
 }
 
 func addFromFile(fp string) ([]types.ComDetails, error) {

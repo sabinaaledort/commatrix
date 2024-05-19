@@ -76,16 +76,6 @@ var generalStaticEntriesWorker = []types.ComDetails{
 	}, {
 		Direction: "ingress",
 		Protocol:  "TCP",
-		Port:      "9001",
-		NodeRole:  "worker",
-		Service:   "machine-config-daemon",
-		Namespace: "openshift-machine-config-operator",
-		Pod:       "machine-config-daemon",
-		Container: "kube-rbac-proxy",
-		Optional:  false,
-	}, {
-		Direction: "ingress",
-		Protocol:  "TCP",
 		Port:      "9537",
 		NodeRole:  "worker",
 		Service:   "crio-metrics",
@@ -177,16 +167,6 @@ var generalStaticEntriesMaster = []types.ComDetails{
 		Pod:       "",
 		Container: "",
 		Optional:  true,
-	}, {
-		Direction: "ingress",
-		Protocol:  "TCP",
-		Port:      "9192",
-		NodeRole:  "master",
-		Service:   "machine-approver",
-		Namespace: "openshift-cluster-machine-approver",
-		Pod:       "machine-approver",
-		Container: "kube-rbac-proxy",
-		Optional:  false,
 	}, {
 		Direction: "ingress",
 		Protocol:  "TCP",
