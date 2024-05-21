@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/openshift-kni/commatrix/client"
 	"github.com/openshift-kni/commatrix/consts"
 	"github.com/openshift-kni/commatrix/debug"
 	"github.com/openshift-kni/commatrix/nodes"
@@ -18,66 +18,35 @@ import (
 )
 
 const (
-	processeNameFieldIdx  = 5
 	localAddrPortFieldIdx = 3
 	interval              = time.Millisecond * 500
 	duration              = time.Second * 5
 )
 
-var (
-	// TcpSSFilterFn is a function variable in Go that filters entries from the 'ss' command output.
-	// It takes an entry from the 'ss' command output and returns true if the entry represents a TCP port in the listening state.
-	tcpSSFilterFn = func(s string) bool {
-		return strings.Contains(s, "127.0.0") || !strings.Contains(s, "LISTEN")
-	}
-	// UdpSSFilterFn is a function variable in Go that filters entries from the 'ss' command output.
-	// It takes an entry from the 'ss' command output and returns true if the entry represents a UDP port in the listening state.
-	udpSSFilterFn = func(s string) bool {
-		return strings.Contains(s, "127.0.0") || !strings.Contains(s, "ESTAB")
-	}
-)
-
-func CreateComDetailsFromNode(cs *client.ClientSet, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
-	debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
+func CreateComDetailsFromNode(debugPod *debug.DebugPod, node *corev1.Node, tcpFile, udpFile *os.File) ([]types.ComDetails, error) {
+	ssOutTCP, err := debugPod.ExecWithRetry("ss -anpltH", interval, duration)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		err := debugPod.Clean()
-		if err != nil {
-			fmt.Printf("failed cleaning debug pod %s: %v", debugPod, err)
-		}
-	}()
-
-	ssOutTCP, err := debugPod.ExecWithRetry("ss -anplt", interval, duration)
-	if err != nil {
-		return nil, err
-	}
-	ssOutUDP, err := debugPod.ExecWithRetry("ss -anplu", interval, duration)
+	ssOutUDP, err := debugPod.ExecWithRetry("ss -anpluH", interval, duration)
 	if err != nil {
 		return nil, err
 	}
 
-	ssOutFilteredTCP := filterStrings(tcpSSFilterFn, splitByLines(ssOutTCP))
-	ssOutFilteredUDP := filterStrings(udpSSFilterFn, splitByLines(ssOutUDP))
-
-	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredTCP, "\n"))))
+	_, err = tcpFile.Write([]byte(fmt.Sprintf("node: %s\n%s\n", node.Name, string(ssOutTCP))))
 	if err != nil {
 		return nil, fmt.Errorf("failed writing to file: %s", err)
 	}
-	_, err = udpFile.Write([]byte(fmt.Sprintf("node: %s\n%s", node.Name, strings.Join(ssOutFilteredUDP, "\n"))))
+	_, err = udpFile.Write([]byte(fmt.Sprintf("node: %s\n%s\n", node.Name, string(ssOutUDP))))
 	if err != nil {
 		return nil, fmt.Errorf("failed writing to file: %s", err)
 	}
 
-	tcpComDetails, err := toComDetails(ssOutFilteredTCP, "TCP", node)
-	if err != nil {
-		return nil, err
-	}
-	udpComDetails, err := toComDetails(ssOutFilteredUDP, "UDP", node)
-	if err != nil {
-		return nil, err
-	}
+	ssOutFilteredTCP := filterEntries(splitByLines(ssOutTCP))
+	ssOutFilteredUDP := filterEntries(splitByLines(ssOutUDP))
+
+	tcpComDetails := toComDetails(debugPod, ssOutFilteredTCP, "TCP", node)
+	udpComDetails := toComDetails(debugPod, ssOutFilteredUDP, "UDP", node)
 
 	res := []types.ComDetails{}
 	res = append(res, udpComDetails...)
@@ -91,25 +60,30 @@ func splitByLines(bytes []byte) []string {
 	return strings.Split(str, "\n")
 }
 
-func toComDetails(ssOutput []string, protocol string, node *corev1.Node) ([]types.ComDetails, error) {
+func toComDetails(debugPod *debug.DebugPod, ssOutput []string, protocol string, node *corev1.Node) []types.ComDetails {
 	res := make([]types.ComDetails, 0)
 	nodeRoles := nodes.GetRole(node)
 
 	for _, ssEntry := range ssOutput {
-		cd, err := parseComDetail(ssEntry)
+		cd := parseComDetail(ssEntry)
+
+		name, err := getContainerName(debugPod, ssEntry)
 		if err != nil {
-			return nil, err
+			log.Debugf("failed to identify container for ss entry: %serr: %s", ssEntry, err)
 		}
+
+		cd.Container = name
 		cd.Protocol = protocol
 		cd.NodeRole = nodeRoles
 		cd.Optional = false
 		res = append(res, *cd)
 	}
 
-	return res, nil
+	return res
 }
 
-func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string, error) {
+// getContainerName receives an ss entry and gets the name of the container exposing this port.
+func getContainerName(debugPod *debug.DebugPod, ssEntry string) (string, error) {
 	pid, err := extractPID(ssEntry)
 	if err != nil {
 		return "", err
@@ -120,7 +94,7 @@ func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string,
 		return "", err
 	}
 
-	res, err := extractContainerInfo(debugPod, containerID)
+	res, err := extractContainerName(debugPod, containerID)
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +102,41 @@ func identifyContainerForPort(debugPod *debug.DebugPod, ssEntry string) (string,
 	return res, nil
 }
 
-func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string, error) {
+// extractPID receives an ss entry and returns the PID number of it.
+func extractPID(ssEntry string) (string, error) {
+	re := regexp.MustCompile(`pid=(\d+)`)
+
+	match := re.FindStringSubmatch(ssEntry)
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("PID not found in the input string")
+	}
+
+	pid := match[1]
+	return pid, nil
+}
+
+// extractContainerID receives a PID of a container, and returns its CRI-O ID.
+func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
+	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
+	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
+	if err != nil {
+		return "", err
+	}
+	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
+
+	match := re.FindStringSubmatch(string(out))
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
+	}
+
+	containerID := match[1]
+	return containerID, nil
+}
+
+// extractContainerName receives CRI-O container ID and returns the container's name.
+func extractContainerName(debugPod *debug.DebugPod, containerID string) (string, error) {
 	type ContainerInfo struct {
 		Containers []struct {
 			Labels struct {
@@ -159,41 +167,10 @@ func extractContainerInfo(debugPod *debug.DebugPod, containerID string) (string,
 	return containerName, nil
 }
 
-func extractContainerID(debugPod *debug.DebugPod, pid string) (string, error) {
-	cmd := fmt.Sprintf("cat /proc/%s/cgroup", pid)
-	out, err := debugPod.ExecWithRetry(cmd, interval, duration)
-	if err != nil {
-		return "", err
-	}
-	re := regexp.MustCompile(`crio-([0-9a-fA-F]+)\.scope`)
-
-	match := re.FindStringSubmatch(string(out))
-
-	if len(match) < 2 {
-		return "", fmt.Errorf("container ID not found node:%s  pid: %s", debugPod.NodeName, pid)
-	}
-
-	containerID := match[1]
-	return containerID, nil
-}
-
-func extractPID(input string) (string, error) {
-	re := regexp.MustCompile(`pid=(\d+)`)
-
-	match := re.FindStringSubmatch(input)
-
-	if len(match) < 2 {
-		return "", fmt.Errorf("PID not found in the input string")
-	}
-
-	pid := match[1]
-	return pid, nil
-}
-
-func filterStrings(filterOutFn func(string) bool, strs []string) []string {
+func filterEntries(ssEntries []string) []string {
 	res := make([]string, 0)
-	for _, s := range strs {
-		if filterOutFn(s) {
+	for _, s := range ssEntries {
+		if strings.Contains(s, "127.0.0") || strings.Contains(s, "::1") || s == "" {
 			continue
 		}
 
@@ -203,10 +180,10 @@ func filterStrings(filterOutFn func(string) bool, strs []string) []string {
 	return res
 }
 
-func parseComDetail(ssEntry string) (*types.ComDetails, error) {
+func parseComDetail(ssEntry string) *types.ComDetails {
 	serviceName, err := extractServiceName(ssEntry)
 	if err != nil {
-		return nil, err
+		log.Debugf(err.Error())
 	}
 
 	fields := strings.Fields(ssEntry)
@@ -217,7 +194,7 @@ func parseComDetail(ssEntry string) (*types.ComDetails, error) {
 		Direction: consts.IngressLabel,
 		Port:      port,
 		Service:   serviceName,
-		Optional:  false}, nil
+		Optional:  false}
 }
 
 func extractServiceName(ssEntry string) (string, error) {

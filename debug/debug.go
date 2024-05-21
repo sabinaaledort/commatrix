@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
@@ -32,11 +33,6 @@ const (
 func New(cs *client.ClientSet, node string, namespace string, image string) (*DebugPod, error) {
 	if namespace == "" {
 		return nil, errors.New("failed creating new debug pod: got empty namespace")
-	}
-
-	err := createNamespace(cs, namespace)
-	if err != nil {
-		return nil, err
 	}
 
 	pod, err := createPodAndWait(cs, interval, timeout, node, namespace, image)
@@ -83,11 +79,6 @@ func (dp *DebugPod) Clean() error {
 	output, err := exec.Command("oc", "delete", "pod", "-n", dp.Namespace, dp.Name).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed deleting debug pod %s/%s: %v\n%s", dp.Namespace, dp.Name, err, string(output))
-	}
-
-	output, err = exec.Command("oc", "delete", "ns", dp.Namespace).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed deleting debug namespace %s: %v\n%s", dp.Namespace, err, string(output))
 	}
 
 	return nil
@@ -289,20 +280,20 @@ func getPodDefinition(node string, namespace string, image string) *corev1.Pod {
 	}
 }
 
-func createNamespace(cs *client.ClientSet, namespace string) error {
-	_, err := cs.Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return fmt.Errorf("failed checking if namespace %s already exists: %v", namespace, err)
-	}
-
-	if err == nil {
-		return nil
-	}
-
+func CreateNamespace(cs *client.ClientSet, namespace string) error {
 	ns := getNamespaceDefinition(namespace)
-	_, err = cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
+	_, err := cs.Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed creating namespace %s: %v", namespace, err)
+	}
+
+	return nil
+}
+
+func DeleteNamespace(cs *client.ClientSet, namespace string) error {
+	err := cs.Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed deleting namespace %s: %v", namespace, err)
 	}
 
 	return nil
@@ -311,24 +302,11 @@ func createNamespace(cs *client.ClientSet, namespace string) error {
 func getNamespaceDefinition(namespace string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
-				"oc.openshift.io/command":                 "oc debug",
-				"openshift.io/node-selector":              "",
-				"openshift.io/sa.scc.mcs":                 "s0:c26,c25",
-				"openshift.io/sa.scc.supplemental-groups": "1000700000/10000",
-				"openshift.io/sa.scc.uid-range":           "1000700000/10000",
-			},
 			Name: namespace,
 			Labels: map[string]string{
-				"pod-security.kubernetes.io/audit":               "privileged",
-				"pod-security.kubernetes.io/enforce":             "privileged",
-				"pod-security.kubernetes.io/warn":                "privileged",
-				"security.openshift.io/scc.podSecurityLabelSync": "false",
-			},
-		},
-		Spec: corev1.NamespaceSpec{
-			Finalizers: []corev1.FinalizerName{
-				"kubernetes",
+				"pod-security.kubernetes.io/audit":   "privileged",
+				"pod-security.kubernetes.io/enforce": "privileged",
+				"pod-security.kubernetes.io/warn":    "privileged",
 			},
 		},
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/openshift-kni/commatrix/types"
 )
 
-// TODO: add integration tests
+// TODO: add integration tests.
 
 type Env int
 
@@ -69,7 +69,9 @@ func New(kubeconfigPath string, customEntriesPath string, e Env, d Deployment) (
 		res = append(res, customComDetails...)
 	}
 
-	return &types.ComMatrix{Matrix: res}, nil
+	cleanedComDetails := types.RemoveDups(res)
+
+	return &types.ComMatrix{Matrix: cleanedComDetails}, nil
 }
 
 func addFromFile(fp string) ([]types.ComDetails, error) {
@@ -94,54 +96,31 @@ func addFromFile(fp string) ([]types.ComDetails, error) {
 
 func getStaticEntries(e Env, d Deployment) ([]types.ComDetails, error) {
 	comDetails := []types.ComDetails{}
-	add := []types.ComDetails{}
 
 	switch e {
 	case Baremetal:
-		err := json.Unmarshal([]byte(baremetalStaticEntriesMaster), &add)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-		}
-		comDetails = append(comDetails, add...)
+		comDetails = append(comDetails, baremetalStaticEntriesMaster...)
 		if d == SNO {
 			break
 		}
-		err = json.Unmarshal([]byte(baremetalStaticEntriesWorker), &add)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-		}
-		comDetails = append(comDetails, add...)
+		comDetails = append(comDetails, baremetalStaticEntriesWorker...)
 	case AWS:
-		err := json.Unmarshal([]byte(awsCloudStaticEntriesMaster), &add)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-		}
-		comDetails = append(comDetails, add...)
+		comDetails = append(comDetails, awsCloudStaticEntriesMaster...)
 		if d == SNO {
 			break
 		}
-		err = json.Unmarshal([]byte(awsCloudStaticEntriesWorker), &add)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-		}
-		comDetails = append(comDetails, add...)
+		comDetails = append(comDetails, awsCloudStaticEntriesWorker...)
 	default:
 		return nil, fmt.Errorf("invalid value for cluster environment")
 	}
 
-	err := json.Unmarshal([]byte(generalStaticEntriesMaster), &add)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-	}
-	comDetails = append(comDetails, add...)
+	comDetails = append(comDetails, generalStaticEntriesMaster...)
 	if d == SNO {
 		return comDetails, nil
 	}
 
-	err = json.Unmarshal([]byte(generalStaticEntriesWorker), &add)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal static entries: %v", err)
-	}
-	comDetails = append(comDetails, add...)
+	comDetails = append(comDetails, MNOStaticEntries...)
+	comDetails = append(comDetails, generalStaticEntriesWorker...)
+
 	return comDetails, nil
 }

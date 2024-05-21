@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"sync"
 
-	clientutil "github.com/openshift-kni/commatrix/client"
-	"github.com/openshift-kni/commatrix/commatrix"
-	"github.com/openshift-kni/commatrix/ss"
-	"github.com/openshift-kni/commatrix/types"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	clientutil "github.com/openshift-kni/commatrix/client"
+	"github.com/openshift-kni/commatrix/commatrix"
+	"github.com/openshift-kni/commatrix/consts"
+	"github.com/openshift-kni/commatrix/debug"
+	"github.com/openshift-kni/commatrix/ss"
+	"github.com/openshift-kni/commatrix/types"
 )
 
 func main() {
@@ -82,7 +85,7 @@ func main() {
 	}
 
 	comMatrixFileName := filepath.Join(destDir, fmt.Sprintf("communication-matrix.%s", format))
-	err = os.WriteFile(comMatrixFileName, []byte(string(res)), 0644)
+	err = os.WriteFile(comMatrixFileName, res, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -92,13 +95,13 @@ func main() {
 		panic(err)
 	}
 
-	tcpFile, err := os.OpenFile(path.Join(destDir, "raw-ss-tcp"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	tcpFile, err := os.OpenFile(path.Join(destDir, "raw-ss-tcp"), os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
 	defer tcpFile.Close()
 
-	udpFile, err := os.OpenFile(path.Join(destDir, "raw-ss-udp"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	udpFile, err := os.OpenFile(path.Join(destDir, "raw-ss-udp"), os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -110,12 +113,35 @@ func main() {
 	}
 
 	nodesComDetails := []types.ComDetails{}
+
+	err = debug.CreateNamespace(cs, consts.DefaultDebugNamespace)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		err := debug.DeleteNamespace(cs, consts.DefaultDebugNamespace)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	nLock := &sync.Mutex{}
 	g := new(errgroup.Group)
 	for _, n := range nodesList.Items {
 		node := n
 		g.Go(func() error {
-			cds, err := ss.CreateComDetailsFromNode(cs, &node, tcpFile, udpFile)
+			debugPod, err := debug.New(cs, node.Name, consts.DefaultDebugNamespace, consts.DefaultDebugPodImage)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				err := debugPod.Clean()
+				if err != nil {
+					fmt.Printf("failed cleaning debug pod %s: %v", debugPod, err)
+				}
+			}()
+
+			cds, err := ss.CreateComDetailsFromNode(debugPod, &node, tcpFile, udpFile)
 			if err != nil {
 				return err
 			}
@@ -140,7 +166,7 @@ func main() {
 	}
 
 	ssMatrixFileName := filepath.Join(destDir, fmt.Sprintf("ss-generated-matrix.%s", format))
-	err = os.WriteFile(ssMatrixFileName, []byte(string(res)), 0644)
+	err = os.WriteFile(ssMatrixFileName, res, 0644)
 	if err != nil {
 		panic(err)
 	}
