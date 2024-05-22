@@ -182,7 +182,7 @@ func main() {
 }
 
 func buildMatrixDiff(mat1 types.ComMatrix, mat2 types.ComMatrix) string {
-	diff := ""
+	diff := consts.CSVHeaders + "\n"
 	for _, cd := range mat1.Matrix {
 		if mat2.Contains(cd) {
 			diff += fmt.Sprintf("%s\n", cd)

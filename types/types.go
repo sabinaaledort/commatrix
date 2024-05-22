@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/openshift-kni/commatrix/consts"
 	"sigs.k8s.io/yaml"
 )
 
@@ -29,13 +30,11 @@ type ComDetails struct {
 }
 
 func ToCSV(m ComMatrix) ([]byte, error) {
-	var header = "Direction,Protocol,Port,Namespace,Service,Pod,Container,Node Role,Optional"
-
 	out := make([]byte, 0)
 	w := bytes.NewBuffer(out)
 	csvwriter := csv.NewWriter(w)
 
-	err := csvwriter.Write(strings.Split(header, ","))
+	err := csvwriter.Write(strings.Split(consts.CSVHeaders, ","))
 	if err != nil {
 		return nil, fmt.Errorf("failed to write to CSV: %w", err)
 	}
