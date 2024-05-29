@@ -69,7 +69,7 @@ func New(kubeconfigPath string, customEntriesPath string, e Env, d Deployment) (
 		res = append(res, customComDetails...)
 	}
 
-	cleanedComDetails := types.RemoveDups(res)
+	cleanedComDetails := types.CleanComDetails(res)
 
 	return &types.ComMatrix{Matrix: cleanedComDetails}, nil
 }

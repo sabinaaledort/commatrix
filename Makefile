@@ -28,6 +28,7 @@ ifeq (, $(shell which oc))
 endif
 
 generate: oc build
+	rm -rf $(DEST_DIR)/communication-matrix
 	mkdir -p $(DEST_DIR)/communication-matrix
 	./$(EXECUTABLE) -format=$(FORMAT) -env=$(CLUSTER_ENV) -destDir=$(DEST_DIR)/communication-matrix -deployment=$(DEPLOYMENT)
 

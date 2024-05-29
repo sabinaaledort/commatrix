@@ -157,7 +157,7 @@ func main() {
 		panic(err)
 	}
 
-	cleanedComDetails := types.RemoveDups(nodesComDetails)
+	cleanedComDetails := types.CleanComDetails(nodesComDetails)
 	ssComMat := types.ComMatrix{Matrix: cleanedComDetails}
 
 	res, err = printFn(ssComMat)
@@ -171,21 +171,7 @@ func main() {
 		panic(err)
 	}
 
-	diff := ""
-	for _, cd := range mat.Matrix {
-		if ssComMat.Contains(cd) {
-			diff += fmt.Sprintf("%s\n", cd)
-			continue
-		}
-		diff += fmt.Sprintf("+ %s\n", cd)
-	}
-
-	for _, cd := range ssComMat.Matrix {
-		if !mat.Contains(cd) {
-			diff += fmt.Sprintf("- %s\n", cd)
-			continue
-		}
-	}
+	diff := buildMatrixDiff(*mat, ssComMat)
 
 	err = os.WriteFile(filepath.Join(destDir, "matrix-diff-ss"),
 		[]byte(diff),
@@ -193,4 +179,30 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func buildMatrixDiff(mat1 types.ComMatrix, mat2 types.ComMatrix) string {
+	diff := consts.CSVHeaders + "\n"
+	for _, cd := range mat1.Matrix {
+		if mat2.Contains(cd) {
+			diff += fmt.Sprintf("%s\n", cd)
+			continue
+		}
+
+		diff += fmt.Sprintf("+ %s\n", cd)
+	}
+
+	for _, cd := range mat2.Matrix {
+		// Skip "rpc.statd" ports, these are randomly open ports on the node,
+		// no need to mention them in the matrix diff
+		if cd.Service == "rpc.statd" {
+			continue
+		}
+
+		if !mat1.Contains(cd) {
+			diff += fmt.Sprintf("- %s\n", cd)
+		}
+	}
+
+	return diff
 }
