@@ -3,6 +3,7 @@ package endpointslices
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -200,6 +201,37 @@ func getContainerName(portNum int, pods []corev1.Pod) (string, error) {
 	return res, nil
 }
 
+func getPodName(pod *corev1.Pod) (string, error) {
+	var (
+		res   string
+		found bool
+	)
+
+	if len(pod.OwnerReferences) == 0 {
+		res, found = strings.CutSuffix(pod.Name, fmt.Sprintf("-%s", pod.Spec.NodeName))
+		if !found {
+			return "", fmt.Errorf("pod name %s is not ending with node name %s", pod.Name, pod.Spec.NodeName)
+		}
+
+		return res, nil
+	}
+
+	name := pod.OwnerReferences[0].Name
+	switch pod.OwnerReferences[0].Kind {
+	case "Node":
+		res, found = strings.CutSuffix(pod.Name, fmt.Sprintf("-%s", pod.Spec.NodeName))
+		if !found {
+			return "", fmt.Errorf("pod name %s is not ending with node name %s", pod.Name, pod.Spec.NodeName)
+		}
+	case "ReplicaSet":
+		res = name[:strings.LastIndex(name, "-")]
+	default:
+		res = name
+	}
+
+	return res, nil
+}
+
 func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]types.ComDetails, error) {
 	if len(epSliceinfo.EndpointSlice.OwnerReferences) == 0 {
 		return nil, fmt.Errorf("empty OwnerReferences in EndpointSlice %s/%s. skipping", epSliceinfo.EndpointSlice.Namespace, epSliceinfo.EndpointSlice.Name)
@@ -209,7 +241,10 @@ func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]type
 
 	// Get the Namespace and Pod's name from the service.
 	namespace := epSliceinfo.Service.Namespace
-	name := epSliceinfo.EndpointSlice.OwnerReferences[0].Name
+	name, err := getPodName(&epSliceinfo.Pods[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod name for endpointslice %s: %w", epSliceinfo.EndpointSlice.Name, err)
+	}
 
 	// Get the node roles of this endpointslice. (master or worker or both).
 	roles := getEndpointSliceNodeRoles(epSliceinfo, nodes)
