@@ -67,7 +67,7 @@ func TestGetPodName(t *testing.T) {
 	}
 	for _, test := range tests {
 		p := defineTestPod(&test)
-		res, err := getPodName(p)
+		res, err := extractPodName(p)
 		if err != nil {
 			t.Fatalf("test %s failed. got error: %s", test.desc, err)
 		}
