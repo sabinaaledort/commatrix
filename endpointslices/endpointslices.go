@@ -201,35 +201,28 @@ func getContainerName(portNum int, pods []corev1.Pod) (string, error) {
 	return res, nil
 }
 
-func getPodName(pod *corev1.Pod) (string, error) {
-	var (
-		res   string
-		found bool
-	)
-
+func extractPodName(pod *corev1.Pod) (string, error) {
 	if len(pod.OwnerReferences) == 0 {
-		res, found = strings.CutSuffix(pod.Name, fmt.Sprintf("-%s", pod.Spec.NodeName))
-		if !found {
-			return "", fmt.Errorf("pod name %s is not ending with node name %s", pod.Name, pod.Spec.NodeName)
-		}
-
-		return res, nil
+		return pod.Name, nil
 	}
 
-	name := pod.OwnerReferences[0].Name
+	ownerRefName := pod.OwnerReferences[0].Name
 	switch pod.OwnerReferences[0].Kind {
 	case "Node":
-		res, found = strings.CutSuffix(pod.Name, fmt.Sprintf("-%s", pod.Spec.NodeName))
+		res, found := strings.CutSuffix(pod.Name, fmt.Sprintf("-%s", pod.Spec.NodeName))
 		if !found {
 			return "", fmt.Errorf("pod name %s is not ending with node name %s", pod.Name, pod.Spec.NodeName)
 		}
+		return res, nil
 	case "ReplicaSet":
-		res = name[:strings.LastIndex(name, "-")]
-	default:
-		res = name
+		return ownerRefName[:strings.LastIndex(ownerRefName, "-")], nil
+	case "DaemonSet":
+		return ownerRefName, nil
+	case "StatefulSet":
+		return ownerRefName, nil
 	}
 
-	return res, nil
+	return "", fmt.Errorf("failed to extract pod name for %s", pod.Name)
 }
 
 func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]types.ComDetails, error) {
@@ -241,7 +234,7 @@ func (epSliceinfo *EndpointSlicesInfo) toComDetails(nodes []corev1.Node) ([]type
 
 	// Get the Namespace and Pod's name from the service.
 	namespace := epSliceinfo.Service.Namespace
-	name, err := getPodName(&epSliceinfo.Pods[0])
+	name, err := extractPodName(&epSliceinfo.Pods[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pod name for endpointslice %s: %w", epSliceinfo.EndpointSlice.Name, err)
 	}

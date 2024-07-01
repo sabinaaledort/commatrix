@@ -15,12 +15,11 @@ type TestCase struct {
 	expected  string
 }
 
-func TestGetPodName(t *testing.T) {
+func TestExtractPodName(t *testing.T) {
 	tests := []TestCase{
 		{
 			desc:     "with-no-owner-reference",
-			nodeName: "worker-node",
-			podName:  "kube-rbac-proxy-worker-node",
+			podName:  "kube-rbac-proxy",
 			expected: "kube-rbac-proxy",
 		},
 		{
@@ -35,7 +34,7 @@ func TestGetPodName(t *testing.T) {
 			expected: "kube-rbac-proxy",
 		},
 		{
-			desc: "with-owner-reference-kind-ReplicaSet",
+			desc: "with-owner-reference-kind-replicaset",
 			ownerRefs: []metav1.OwnerReference{
 				{
 					Kind: "ReplicaSet",
@@ -45,7 +44,7 @@ func TestGetPodName(t *testing.T) {
 			expected: "kube-rbac-proxy",
 		},
 		{
-			desc: "with-owner-reference-kind-DaemonSet",
+			desc: "with-owner-reference-kind-daemonset",
 			ownerRefs: []metav1.OwnerReference{
 				{
 					Kind: "DaemonSet",
@@ -55,7 +54,7 @@ func TestGetPodName(t *testing.T) {
 			expected: "kube-rbac-proxy",
 		},
 		{
-			desc: "with-owner-reference-kind-StatefulSet",
+			desc: "with-owner-reference-kind-statefulset",
 			ownerRefs: []metav1.OwnerReference{
 				{
 					Kind: "StatefulSet",
@@ -67,7 +66,7 @@ func TestGetPodName(t *testing.T) {
 	}
 	for _, test := range tests {
 		p := defineTestPod(&test)
-		res, err := getPodName(p)
+		res, err := extractPodName(p)
 		if err != nil {
 			t.Fatalf("test %s failed. got error: %s", test.desc, err)
 		}
