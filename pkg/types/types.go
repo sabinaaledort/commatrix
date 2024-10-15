@@ -245,6 +245,10 @@ func (m *ComMatrix) ToNFTables() ([]byte, error) {
 			tcp dport 30000-32767 accept
 			udp dport 30000-32767 accept
 
+			# Allow openshift image registry port
+			tcp dport 5000 accept
+			udp dport 5000 accept
+
 			# Keep port open for origin test
 			# https://github.com/openshift/origin/blob/master/vendor/k8s.io/kubernetes/test/e2e/network/service.go#L2622
 			tcp dport 10180 accept
